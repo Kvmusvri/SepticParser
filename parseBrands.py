@@ -29,20 +29,20 @@ def parse_link_brands(link: str) -> list:
 
 def parse_current_brands(link: str) -> list:
     soup = bs_response(link)
-    products_pages = soup.find('ul', class_='page-numbers').find_all('a')
+    products_pages = soup.find('ul', class_='page-numbers')
 
     pages_links = []
-    for pg_link in products_pages:
-        pages_links.append(pg_link['href'])
+    if products_pages:
+        for pg_link in products_pages.find_all('a'):
+            pages_links.append(pg_link['href'])
 
-    if pages_links:
-        pages_links.pop()
+        if pages_links:
+            pages_links.pop()
 
     pages_links.insert(0, link)
 
     links_product = []
     for page_link in pages_links:
-        print(page_link)
         soup = bs_response(page_link)
         products = soup.find_all('div', class_='products products-catalog')
 
@@ -51,11 +51,9 @@ def parse_current_brands(link: str) -> list:
             # print(prod_link)
             for item_link in prod_link:
                 if 'https' in item_link['href']:
-                    print(item_link['href'])
                     links_product.append(item_link['href'])
 
     links_product = remove_dup(links_product)
-    print(len(links_product))
 
     return links_product
 

@@ -36,20 +36,17 @@ def parse_current_brands(link: str) -> list:
     pages_links.insert(0, link)
 
     # с каждой страницы собираем товары
-    links_product_brand = []
+    product_brand_links = []
     for page in pages_links:
         soup = bs_response(page)
 
-        # получаем все товары на странице
-        products = soup.find_all('div', class_='products products-catalog')
-        for prod in products:
-            for item in prod:
-                # Проходимся по каждому товару и собираем ссылки
-                page_items = item.find_all('div', class_='product-item')
-                for item_link in page_items:
-                    links_product_brand.append(item_link.find('a').get('href'))
+        products_page = (soup.find('div', class_='products products-catalog')
+                         .find_all('div', class_='product-item'))
+        for item in products_page:
+            item_link = item.find('a')['href']
+            product_brand_links.append(item_link)
 
-    return links_product_brand
+    return product_brand_links
 
 
 if __name__ == '__main__':

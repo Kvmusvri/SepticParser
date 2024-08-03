@@ -1,9 +1,19 @@
 from bs4 import BeautifulSoup
-from parseBrands import bs_response
+from parseBrands import parse_current_brands, parse_link_brands
+import asyncio
+import aiohttp
 import requests
+from time import perf_counter
+from asyncio import Semaphore
+
+# старый результат 25 минут
+# новый результат 1223.91 (20 минут) c просто асинком
+# новый результат 310.03 (5 минут) после увеличения количества подключений с 100 до 200 с vpn с выводом
+# новый результат 282.03 (4,7 минутs) после увеличения количества подключений с 200 до 400 с vpn с выводом
+# новый результат 378.80 (6.3 минуты) 400 подключений без впн без вывода
 
 
-def parse_current_brand_products(link: str) -> dict:
+async def parse_current_brand_products(link: str, semaphore: Semaphore) -> dict:
     """
     Собираем следующие поля с переданной карточки товара
     name - имя
@@ -18,31 +28,39 @@ def parse_current_brand_products(link: str) -> dict:
     :rtype: dict:
     :return: card_char - словарь данных карточки товара
     """
-    soup = bs_response(link)
-    name = parce_name_current_brand_product(soup)
-    price = parce_price_current_brand_product(soup)
-    card_pics = parse_pics_current_brand_product(soup)
+    await semaphore.acquire()
+    async with aiohttp.ClientSession(trust_env=True, connector=aiohttp.TCPConnector(limit=400)) as session:
+        response = await session.get(url=link)
+        soup = BeautifulSoup(await response.text(), 'lxml')
 
-    # сохраняем принцип работы в формате html
-    work_principle = soup.find('div',
-                               class_='woocommerce-Tabs-panel woocommerce-Tabs-panel--description panel entry-content wc-tab')
+        name = await parce_name_current_brand_product(soup)
+        price = await parce_price_current_brand_product(soup)
+        card_pics = await parse_pics_current_brand_product(soup)
 
-    card_char = {
-        'Ссылка': link,
-        'Наименование': name,
-        'Цена ₽': price,
-        'Изображение': card_pics,
-        'Принцип работы': work_principle
-    }
+        # сохраняем принцип работы в формате html
+        work_principle = soup.find('div',
+                                   class_='woocommerce-Tabs-panel woocommerce-Tabs-panel--description panel entry-content wc-tab')
 
-    card_char = parce_feature_current_brand_product(soup, card_char)
+        card_char = {
+            'Ссылка': link,
+            'Наименование': name,
+            'Цена ₽': price,
+            'Изображение': card_pics,
+            'Принцип работы': work_principle
+        }
 
-    print(card_char)
+        card_char = parce_feature_current_brand_product(soup, card_char)
+
+    await session.close()
+
+    semaphore.release()
+
+    # print(card_char)
 
     return card_char
 
 
-def parse_pics_current_brand_product(soup: BeautifulSoup) -> list:
+async def parse_pics_current_brand_product(soup: BeautifulSoup) -> list:
     # Сохраняем изображение в виде ссылок
     img_links =[]
     card_pics = soup.find_all('div',
@@ -58,15 +76,17 @@ def parse_pics_current_brand_product(soup: BeautifulSoup) -> list:
 
 def parce_feature_current_brand_product(soup: BeautifulSoup, card_char: dict) -> dict:
     # Сохраняем характеристики товара
-    feature = soup.find('div', class_='sidebar-content__info').find('table')
+    feature = soup.find('div', class_='sidebar-content__info')
     if feature:
-        for row in feature:
-            card_char[row.find('th').get_text()] = row.find('td').get_text()
+        feature_tabe = feature.find().find('table')
+        if feature_tabe:
+            for row in feature:
+                card_char[row.find('th').get_text()] = row.find('td').get_text()
 
     return card_char
 
 
-def parce_name_current_brand_product(soup: BeautifulSoup) -> str:
+async def parce_name_current_brand_product(soup: BeautifulSoup) -> str:
     name = ''
     # сохраняем имя и цену
     name_field = soup.find('h1', class_='product_title entry-title')
@@ -76,7 +96,7 @@ def parce_name_current_brand_product(soup: BeautifulSoup) -> str:
     return name
 
 
-def parce_price_current_brand_product(soup: BeautifulSoup) -> int:
+async def parce_price_current_brand_product(soup: BeautifulSoup) -> int:
     # Цены может не быть, тогда на сайте будет указано По заказу
     price = 'По заказу'
     price_field = soup.find('div', class_='row price-row')
@@ -95,6 +115,31 @@ def parce_price_current_brand_product(soup: BeautifulSoup) -> int:
     return price
 
 
+async def main():
+    semaphore_itmes = Semaphore(25)
+    semaphore_links = Semaphore(25)
+    src = "https://septikimoskva.com/catalog/"
+    brand_links = await parse_link_brands(src)
+
+    parse_items_links_from_brands_tasks = []
+    for link in brand_links:
+        parse_items_links_from_brands_tasks.append(asyncio.create_task(parse_current_brands(link, semaphore_links)))
+
+    items_list = await asyncio.gather(*parse_items_links_from_brands_tasks)
+
+    parse_items_from_links_tasks = []
+    for list_links in items_list:
+        # сильно тормозит добавление
+        for item_link in list_links:
+            parse_items_from_links_tasks.append(asyncio.create_task(parse_current_brand_products(item_link,
+                                                                                                 semaphore_itmes)))
+
+        await asyncio.gather(*parse_items_from_links_tasks)
+        parse_items_from_links_tasks.clear()
+
+
 if __name__ == '__main__':
-    src = 'https://septikimoskva.com/catalog/multplast/septik-termit-profi-0-7-s/'
-    parse_current_brand_products(src)
+    start = perf_counter()
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(main())
+    print(f"time: {(perf_counter() - start):.02f}")

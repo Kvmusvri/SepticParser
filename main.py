@@ -2,9 +2,11 @@ from bs4 import BeautifulSoup
 import requests
 from parseBrands import parse_current_brands, parse_link_brands
 from parseProducts import parse_current_brand_products
-
+import time
 
 def main() -> None:
+    start = time.time()
+    # заменить на конструкцию try\except
     broken_page = ['https://septikimoskva.com/catalog/kit/',
                    'https://septikimoskva.com/catalog/kit/kit-bio/',
                    'https://septikimoskva.com/catalog/kit/kit-pro/',
@@ -33,7 +35,7 @@ def main() -> None:
     # broken_page=[]
     src = "https://septikimoskva.com/catalog/"
     # Собираем бренды
-    brands_links = parse_link_brands(src)[58:]
+    brands_links = parse_link_brands(src)
 
     # Проходимся по каждому бренду и собираем ссылки на товары
     for link in brands_links:
@@ -52,6 +54,9 @@ def main() -> None:
             if brand_link in broken_page:
                 continue
             parse_current_brand_products(brand_link)
+
+    print(f"Время выполнения в секундах {(time.time() - start)}")
+    print(f"Время выполнения в минутах {(time.time() - start)/60}")
 
 
 

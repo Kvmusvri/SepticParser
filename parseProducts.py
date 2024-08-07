@@ -5,12 +5,17 @@ import aiohttp
 import requests
 from time import perf_counter
 from asyncio import Semaphore
+import csv
+from selectolax.lexbor import LexborHTMLParser
 
 # старый результат 25 минут
 # новый результат 1223.91 (20 минут) c просто асинком
 # новый результат 310.03 (5 минут) после увеличения количества подключений с 100 до 200 с vpn с выводом
 # новый результат 282.03 (4,7 минутs) после увеличения количества подключений с 200 до 400 с vpn с выводом
 # новый результат 378.80 (6.3 минуты) 400 подключений без впн без вывода
+# новый результат time: 455.23 (7.5 минуты) 200 подключений без впн без вывода переписали под selectolax
+# новый результат time: 178.44.23 (3.4минуты) 200 подключений 25 семафор без впн с выводом переписали под selectolax убрали буфер задач
+# новый результат time: 78.40 100 подключений 30 семафор без впн с выводом переписали под selectolax без буфера задач
 
 
 async def parse_current_brand_products(link: str, semaphore: Semaphore) -> dict:
@@ -29,117 +34,148 @@ async def parse_current_brand_products(link: str, semaphore: Semaphore) -> dict:
     :return: card_char - словарь данных карточки товара
     """
     await semaphore.acquire()
-    async with aiohttp.ClientSession(trust_env=True, connector=aiohttp.TCPConnector(limit=400)) as session:
+    async with aiohttp.ClientSession(trust_env=True, connector=aiohttp.TCPConnector(limit=100)) as session:
         response = await session.get(url=link)
-        soup = BeautifulSoup(await response.text(), 'lxml')
+        parser = LexborHTMLParser(await response.text())
 
-        name = await parce_name_current_brand_product(soup)
-        price = await parce_price_current_brand_product(soup)
-        card_pics = await parse_pics_current_brand_product(soup)
+        brand_name = await parse_brand(parser)
 
-        # сохраняем принцип работы в формате html
-        work_principle = soup.find('div',
-                                   class_='woocommerce-Tabs-panel woocommerce-Tabs-panel--description panel entry-content wc-tab')
+        name = await parce_name_current_brand_product(parser)
+
+        price = await parce_price_current_brand_product(parser)
+
+        card_pics = await parse_pics_current_brand_product(parser)
+
+        work_principle = await parse_work_principle(parser)
+
+        docs_links = await parse_dock(parser)
 
         card_char = {
+            'Бренд': brand_name,
             'Ссылка': link,
             'Наименование': name,
             'Цена ₽': price,
             'Изображение': card_pics,
-            'Принцип работы': work_principle
+            'Документация': docs_links,
+            'Принцип работы': work_principle,
         }
 
-        card_char = parce_feature_current_brand_product(soup, card_char)
+        card_char = parce_feature_current_brand_product(parser, card_char)
 
     await session.close()
 
-    semaphore.release()
+    print(card_char)
 
-    # print(card_char)
+    semaphore.release()
 
     return card_char
 
 
-async def parse_pics_current_brand_product(soup: BeautifulSoup) -> list:
+async def parse_brand(parser: LexborHTMLParser) -> str:
+    brand_name = ''
+
+    brand_field = parser.css('#breadcrumbs > span > span:nth-child(3) > a')
+
+    if brand_field:
+        brand_name = brand_field[0].text()
+
+    return brand_name
+
+
+async def parse_work_principle(parser: LexborHTMLParser) -> str:
+    # сохраняем принцип работы в формате html
+    work_principle = ''
+
+    work_principle_field = parser.css('div.woocommerce-tabs .woocommerce-Tabs-panel')
+
+    if work_principle_field:
+        work_principle = work_principle_field[0].html
+
+    return work_principle
+
+
+async def parse_dock(parser: LexborHTMLParser) -> list:
+    docs_links = []
+
+    docs_field = parser.css('#tab-docs > p')
+
+    if docs_field:
+        docs_links = [node.attributes['href'] for node in docs_field[0].css('a') if 'href' in node.attributes]
+
+    return docs_links
+
+
+async def parse_pics_current_brand_product(parser: LexborHTMLParser) -> list:
     # Сохраняем изображение в виде ссылок
-    img_links =[]
-    card_pics = soup.find_all('div',
-                              class_='woocommerce-product-gallery woocommerce-product-gallery--with-images woocommerce-product-gallery--columns-4 images')
+    img_links = []
+    card_pics = parser.css('div.sidebar-content__img')
+
     if card_pics:
-        for card in card_pics:
-            img_link = card.find_all('a')
-            for link in img_link:
-                img_links.append(link['href'])
+        img_links = [node.attributes['href'] for node in card_pics[0].css('a') if 'href' in node.attributes]
 
     return img_links
 
 
-def parce_feature_current_brand_product(soup: BeautifulSoup, card_char: dict) -> dict:
+def parce_feature_current_brand_product(parser: LexborHTMLParser, card_char: dict) -> dict:
     # Сохраняем характеристики товара
-    feature = soup.find('div', class_='sidebar-content__info')
-    if feature:
-        feature_tabe = feature.find().find('table')
-        if feature_tabe:
-            for row in feature:
-                card_char[row.find('th').get_text()] = row.find('td').get_text()
+    rows = parser.css('tr.woocommerce-product-attributes-item')
+
+    for row in rows:
+        label = row.css_first('th.woocommerce-product-attributes-item__label').text(strip=True)
+        value = row.css_first('td.woocommerce-product-attributes-item__value').text(strip=True)
+        card_char[label] = value
 
     return card_char
 
 
-async def parce_name_current_brand_product(soup: BeautifulSoup) -> str:
+async def parce_name_current_brand_product(parser: LexborHTMLParser) -> str:
     name = ''
     # сохраняем имя и цену
-    name_field = soup.find('h1', class_='product_title entry-title')
+    name_field = parser.css('h1')
     if name_field:
-        name = name_field.get_text()
+        name = name_field[0].text()
 
     return name
 
 
-async def parce_price_current_brand_product(soup: BeautifulSoup) -> int:
+async def parce_price_current_brand_product(parser: LexborHTMLParser) -> int:
     # Цены может не быть, тогда на сайте будет указано По заказу
     price = 'По заказу'
-    price_field = soup.find('div', class_='row price-row')
+    price_field = parser.css('div.sidebar-content__product')
 
     if price_field:
-        # Цена может быть со скидкой, тогда собираем вариант со скидкой
-        sale_price_field = price_field.find('ins')
-        if sale_price_field:
-            price = int(''.join(sale_price_field.get_text()[0:-2].split()))
+        sale_price = price_field[0].css('ins')
+        if sale_price:
+            price = int(''.join(sale_price[0].text()[:-2].split()))
         else:
-            # Если цена указана без скидки, то собираем ее
-            normal_price_field = price_field.find('bdi')
-            if normal_price_field:
-                price = int(''.join(normal_price_field.get_text()[0:-2].split()))
+            normal_price = price_field[0].css('bdi')
+            if normal_price:
+                price = int(''.join(normal_price[0].text()[:-2].split()))
 
     return price
 
 
 async def main():
-    semaphore_itmes = Semaphore(25)
-    semaphore_links = Semaphore(25)
-    src = "https://septikimoskva.com/catalog/"
-    brand_links = await parse_link_brands(src)
+    semaphore_items = Semaphore(25)
+    # semaphore_links = Semaphore(25)
 
-    parse_items_links_from_brands_tasks = []
-    for link in brand_links:
-        parse_items_links_from_brands_tasks.append(asyncio.create_task(parse_current_brands(link, semaphore_links)))
-
-    items_list = await asyncio.gather(*parse_items_links_from_brands_tasks)
+    with open('out.csv', 'r') as read_obj:
+        csv_reader = csv.reader(read_obj)
+        list_of_csv = list(csv_reader)
 
     parse_items_from_links_tasks = []
-    for list_links in items_list:
-        # сильно тормозит добавление
+    for list_links in list_of_csv:
         for item_link in list_links:
             parse_items_from_links_tasks.append(asyncio.create_task(parse_current_brand_products(item_link,
-                                                                                                 semaphore_itmes)))
 
-        await asyncio.gather(*parse_items_from_links_tasks)
-        parse_items_from_links_tasks.clear()
+                                                                                                 semaphore_items)))
+    await asyncio.gather(*parse_items_from_links_tasks)
+
 
 
 if __name__ == '__main__':
     start = perf_counter()
     loop = asyncio.get_event_loop()
     loop.run_until_complete(main())
+
     print(f"time: {(perf_counter() - start):.02f}")

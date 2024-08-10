@@ -11,8 +11,10 @@
 * Описание содержится `<div class='woocommerce-Tabs-panel woocommerce-Tabs-panel--description panel entry-content wc-tab'>`.
 * Все картинки товара содержатся в `<ol class='flex-control-nav flex-control-thumbs'>`
 
-Использованные библиотеки 
+## Всего товаров собрано - 963
+## Время работы программы - 30 секунд
 
+# Использованные библиотеки 
 
 |lib|version|
 |---|-------|

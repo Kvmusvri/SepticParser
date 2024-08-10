@@ -1,21 +1,9 @@
-from bs4 import BeautifulSoup
-from parseBrands import parse_current_brands, parse_link_brands
 import asyncio
 import aiohttp
-import requests
 from time import perf_counter
 from asyncio import Semaphore
 import csv
 from selectolax.lexbor import LexborHTMLParser
-
-# старый результат 25 минут
-# новый результат 1223.91 (20 минут) c просто асинком
-# новый результат 310.03 (5 минут) после увеличения количества подключений с 100 до 200 с vpn с выводом
-# новый результат 282.03 (4,7 минутs) после увеличения количества подключений с 200 до 400 с vpn с выводом
-# новый результат 378.80 (6.3 минуты) 400 подключений без впн без вывода
-# новый результат time: 455.23 (7.5 минуты) 200 подключений без впн без вывода переписали под selectolax
-# новый результат time: 178.44.23 (3.4минуты) 200 подключений 25 семафор без впн с выводом переписали под selectolax убрали буфер задач
-# новый результат time: 78.40 100 подключений 30 семафор без впн с выводом переписали под selectolax без буфера задач
 
 
 async def parse_current_brand_products(link: str, semaphore: Semaphore) -> dict:
@@ -170,7 +158,6 @@ async def main():
 
                                                                                                  semaphore_items)))
     await asyncio.gather(*parse_items_from_links_tasks)
-
 
 
 if __name__ == '__main__':

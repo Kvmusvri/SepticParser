@@ -5,36 +5,31 @@ from asyncio import Semaphore
 import csv
 import asyncio
 from exportExcel import excel_export
+from parseBrands import parse_items_links_into_csv
 import pandas as pd
-
-
 
 
 async def main() -> None:
     semaphore_items = Semaphore(25)
-    semaphore_links = Semaphore(25)
 
-    with open('out.csv', newline='') as f:
+    await parse_items_links_into_csv()
+
+    with open('all_products_link.csv', newline='') as f:
         reader = csv.reader(f)
-        list_of_csv = list(reader)
+        items_links_list = list(reader)
 
     parse_items_from_links_tasks = []
-    for list_links in list_of_csv:
-        for item_link in list_links:
-            parse_items_from_links_tasks.append(asyncio.create_task(parse_current_brand_products(item_link,
-                                                                                                 semaphore_items)))
-    items_dict = await asyncio.gather(*parse_items_from_links_tasks)
+    for item_link in items_links_list:
+        parse_items_from_links_tasks.append(asyncio.create_task(parse_current_brand_products(item_link[0], semaphore_items)))
 
-    excel_export(items_dict)
+    items_cards = await asyncio.gather(*parse_items_from_links_tasks)
 
+    excel_export(items_cards)
 
 
 if __name__ == '__main__':
     start = perf_counter()
     loop = asyncio.get_event_loop()
     loop.run_until_complete(main())
-
-    # link_test = ['https://septikimoskva.com/catalog/evrolos/septik-udacha-1/']
-    # asyncio.run(test_one_septic(link_test))
 
     print(f"time: {(perf_counter() - start):.02f}")

@@ -10,3 +10,15 @@
 * Все характеристики содержатся в `<div class='sidebar-content__info'>`.
 * Описание содержится `<div class='woocommerce-Tabs-panel woocommerce-Tabs-panel--description panel entry-content wc-tab'>`.
 * Все картинки товара содержатся в `<ol class='flex-control-nav flex-control-thumbs'>`
+
+Использованные библиотеки 
+
+
+|lib|version|
+|---|-------|
+|aiohttp|3.10.0|
+|selectolax|0.3.21|
+|pandas|2.2.2|
+
+
+

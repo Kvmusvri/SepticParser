@@ -1,4 +1,3 @@
-from parseBrands import parse_current_brands, parse_link_brands
 from parseProducts import parse_current_brand_products
 from time import perf_counter
 from asyncio import Semaphore
@@ -6,7 +5,6 @@ import csv
 import asyncio
 from exportExcel import excel_export
 from parseBrands import parse_items_links_into_csv
-import pandas as pd
 
 
 async def main() -> None:

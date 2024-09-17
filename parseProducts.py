@@ -6,7 +6,7 @@ import csv
 from selectolax.lexbor import LexborHTMLParser
 
 
-async def parse_current_brand_products(link: str, semaphore: Semaphore) -> dict:
+async def parse_current_brand_products(link: str, main_brand: str, sub_brand: str, semaphore: Semaphore) -> dict:
     """
     Собираем следующие поля с переданной карточки товара
     name - имя
@@ -15,8 +15,14 @@ async def parse_current_brand_products(link: str, semaphore: Semaphore) -> dict:
     work_principle - принцип работы, собирается в формате HTML
     feature - характеристики товара
 
-    :param link:
+    :param link: ссылка на карточку товара
     :type link: str
+
+    :param main_brand: основной бренд товара
+    :type main_brand: str
+
+    :param sub_brand: суббренд товара
+    :type sub_brand: str
 
     :rtype: dict:
     :return: card_char - словарь данных карточки товара
@@ -26,7 +32,10 @@ async def parse_current_brand_products(link: str, semaphore: Semaphore) -> dict:
         response = await session.get(url=link)
         parser = LexborHTMLParser(await response.text())
 
-        brand_name = await parse_brand(parser)
+        # brand_name = await parse_brand(parser)
+        main_brand_name = main_brand
+
+        sub_brand_name = sub_brand
 
         name = await parce_name_current_brand_product(parser)
 
@@ -39,7 +48,8 @@ async def parse_current_brand_products(link: str, semaphore: Semaphore) -> dict:
         docs_links = await parse_dock(parser)
 
         card_char = {
-            'Бренд': brand_name,
+            'Бренд': main_brand_name,
+            'Суббренд': sub_brand_name,
             'Ссылка': link,
             'Наименование': name,
             'Цена ₽': price,

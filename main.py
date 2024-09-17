@@ -18,7 +18,15 @@ async def main() -> None:
 
     parse_items_from_links_tasks = []
     for item_link in items_links_list:
-        parse_items_from_links_tasks.append(asyncio.create_task(parse_current_brand_products(item_link[0], semaphore_items)))
+        lst = item_link[0].split('*')
+        main_brand = lst[0]
+        sub_brand = lst[1]
+        link = lst[2]
+
+        parse_items_from_links_tasks.append(asyncio.create_task(parse_current_brand_products(link,
+                                                                                             main_brand,
+                                                                                             sub_brand,
+                                                                                             semaphore_items)))
 
     items_cards = await asyncio.gather(*parse_items_from_links_tasks)
 

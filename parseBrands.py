@@ -60,6 +60,16 @@ async def parse_current_brands(link: str, semaphore: Semaphore) -> list:
         # получаем ссылки на все страницы товаров конкретного бренда
         brand_pages = parser.css('ul.page-numbers')
 
+        # сохраняем название бренда
+        # могут быть суббренды, а на сайте поломанная система ссылок
+        # из-за чего потом суббренд собрать будет невозможно
+        sub_brand_brand_field = parser.css('#breadcrumbs > span > span.breadcrumb_last')[0].text()
+        main_brand_field = parser.css('#breadcrumbs > span > span:nth-child(3)')[0].text()
+
+        print(sub_brand_brand_field)
+        print(main_brand_field)
+
+
         # Если нашли такой ul, собираем ссылки внутри него
         pages_links = []
         if brand_pages:
@@ -73,21 +83,25 @@ async def parse_current_brands(link: str, semaphore: Semaphore) -> list:
         # с каждой страницы собираем ссылки на товары
         product_brand_links = []
         for page in pages_links:
+            print(page)
             async with session.get(page) as response:
                 parser = LexborHTMLParser(await response.text())
-
                 products_page = parser.css('div.products.products-catalog')
 
-                product_brand_links = [node.attributes['href'] for node in products_page[0].css('div.product-item a')
-                                       if 'href' in node.attributes]
+                product_brand_links = []
+                for node in products_page[0].css('div.product-item a'):
+                    # print(node.text())
+                    if 'href' in node.attributes:
+                        product_brand_links.append(f"{main_brand_field}*{sub_brand_brand_field}*{node.attributes['href']}")
+
 
         # Удаляем муссор из собранного
         for link in product_brand_links:
-            if link.startswith('?'):
+            if link.replace(f'{main_brand_field}*{sub_brand_brand_field}*', '').startswith('?'):
                 product_brand_links.remove(link)
 
         for link in product_brand_links:
-            if link == '#popup-product':
+            if link.replace(f'{main_brand_field}*{sub_brand_brand_field}*', '') == '#popup-product':
                 product_brand_links.remove(link)
 
         semaphore.release()

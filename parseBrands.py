@@ -109,16 +109,17 @@ async def parse_items_links_into_csv():
         reader = csv.reader(f)
         brand_links = list(reader)
 
-    parse_tasks = []
-    for link in brand_links:
-        for l in link:
-            parse_tasks.append(asyncio.create_task(parse_current_brands(l, semaphore)))
+    tl = 'https://septikimoskva.com/catalog/evrolos/evrolos-bio/'
+    print(await parse_current_brands(tl, semaphore))
 
-    items_list = await asyncio.gather(*parse_tasks)
+    # parse_tasks = []
+    # for link in brand_links:
+    #     for l in link:
+    #         parse_tasks.append(asyncio.create_task(parse_current_brands(l, semaphore)))
+    #
+    # items_list = await asyncio.gather(*parse_tasks)
 
-    print(items_list)
-
-    write_links_csv(items_list)
+    # write_links_csv(items_list)
 
 
 if __name__ == '__main__':

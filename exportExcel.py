@@ -12,7 +12,7 @@ def excel_export(data_list: tuple) -> None:
 
     combined_df = pd.concat(df_list)
 
-    combined_df = combined_df.drop_duplicates(subset=['Наименование'])
+    # combined_df = combined_df.drop_duplicates(subset=['Наименование'])
 
     combined_df.to_excel('out_table_items.xlsx', index=False)
 
